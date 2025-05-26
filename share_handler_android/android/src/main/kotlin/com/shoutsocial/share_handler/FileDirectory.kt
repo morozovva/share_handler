@@ -31,15 +31,7 @@ object FileDirectory {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT && DocumentsContract.isDocumentUri(context, uri)) {
             // ExternalStorageProvider
             if (isExternalStorageDocument(uri)) {
-                val docId = DocumentsContract.getDocumentId(uri)
-                val split = docId.split(":".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
-                val type = split[0]
-
-                return if ("primary".equals(type, ignoreCase = true)) {
-                    context.getExternalFilesDir(null).toString() + "/" + split[1]
-                } else {
-                    getDataColumn(context, uri, null, null)
-                }
+                return getCachedDocumentPath(context, uri)
             } else if (isDownloadsDocument(uri)) {
                 return try {
                     val id = DocumentsContract.getDocumentId(uri)
@@ -75,6 +67,30 @@ object FileDirectory {
 
         return uri.path
     }
+
+    /**
+ * Copies the file referenced by the URI to the cache directory and returns its path.
+ *
+ * @param context The context.
+ * @param uri The Uri to copy.
+ */
+private fun getCachedDocumentPath(context: Context, uri: Uri): String? {
+    val fileName = uri.lastPathSegment?.split("/")?.lastOrNull() ?: "temp_${System.currentTimeMillis()}"
+    val tempFile = File(context.cacheDir, fileName)
+
+    return try {
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            FileOutputStream(tempFile).use { output ->
+                input.copyTo(output)
+            }
+        }
+        Log.i("FileDirectory", "File copied to temp: ${tempFile.absolutePath}")
+        tempFile.absolutePath
+    } catch (e: Exception) {
+        Log.e("FileDirectory", "Failed to copy file to temp: ${e.localizedMessage}")
+        null
+    }
+}
 
     /**
      * Get the value of the data column for this Uri. This is useful for
